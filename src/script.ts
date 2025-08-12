@@ -3,21 +3,9 @@ import { Node, Flow } from 'pocketflow';
 import { createOpenAI, generateText, generateObject } from '@guolei1994/fast-ai';
 import { z } from 'zod';
 
-// 初始化OpenAI客户端
-// 注意：在生产环境中，API密钥应该从环境变量或安全的配置中获取
-const API_KEY = ''; // 请在这里填入你的ModelScope API密钥
+const useMock = false;
 
-// 如果没有API密钥，则使用模拟模式
-const useMock = !API_KEY;
-
-let client: ReturnType<typeof createOpenAI> | undefined;
-if (!useMock) {
-    client = createOpenAI({
-        // 可以自定义baseURL，默认是https://api-inference.modelscope.cn/v1
-        // baseURL: 'https://api-inference.modelscope.cn/v1',
-        apiKey: API_KEY
-    });
-}
+let client = createOpenAI();
 
 // 定义一个用于调用LLM生成文本的节点
 interface LLMTextNodeConfig {
@@ -48,23 +36,15 @@ class LLMTextNode extends Node {
         console.log('系统提示:', this.systemPrompt);
         console.log('最终提示:', prompt);
 
-        if (useMock) {
-            // 模拟LLM响应
-            const mockResponse = `这是对 \"${prompt}\" 的模拟回复。`;
-            console.log('LLM Text Response (模拟):', mockResponse);
-            return mockResponse;
-        }
-
         try {
             if (!client) {
                 throw new Error('AI client is not initialized');
             }
 
-            const { text } = await generateText({
-                client,
-                model: 'Qwen/Qwen2.5-7B-Instruct', // 使用Qwen模型
+            const text = await generateText({
+                model: client(process.env.OPENAI_MODEL as any),
                 messages: [
-                    ...(this.systemPrompt ? [{ role: 'system' as const, content: this.systemPrompt }] : []),
+                    { role: 'system' as const, content: this.systemPrompt },
                     { role: 'user' as const, content: prompt }
                 ]
             });
@@ -110,52 +90,9 @@ class LLMObjectNode extends Node {
         console.log('系统提示:', this.systemPrompt);
         console.log('最终提示:', prompt);
 
-        if (useMock) {
-            // 模拟LLM响应
-            const mockResponse = {
-                task: "写一本关于游戏ECS开发历史的书",
-                nodes: [
-                    {
-                        id: "start",
-                        type: "DataProcessNode",
-                        config: {
-                            processFn: "identity"
-                        }
-                    },
-                    {
-                        id: "research",
-                        type: "LLMTextNode",
-                        config: {
-                            promptTemplate: "研究游戏ECS架构的历史发展，包括关键人物、技术突破和重要项目。输出一个详细的大纲：{{input}}",
-                            systemPrompt: "你是一位游戏开发历史专家，熟悉ECS架构的发展历程。"
-                        }
-                    },
-                    {
-                        id: "write",
-                        type: "LLMTextNode",
-                        config: {
-                            promptTemplate: "根据以下大纲撰写一章内容：{{input}}",
-                            systemPrompt: "你是一位技术作家，能够将复杂的技术概念以通俗易懂的方式表达。"
-                        }
-                    }
-                ],
-                connections: [
-                    { from: "start", to: "research" },
-                    { from: "research", to: "write" }
-                ]
-            };
-            console.log('LLM Object Response (模拟):', JSON.stringify(mockResponse, null, 2));
-            return mockResponse;
-        }
-
         try {
-            if (!client) {
-                throw new Error('AI client is not initialized');
-            }
-
-            const { object } = await generateObject({
-                client,
-                model: 'Qwen/Qwen2.5-7B-Instruct', // 使用Qwen模型
+            const object = await generateObject({
+                model: client(process.env.OPENAI_MODEL as any),
                 schema: this.schema,
                 prompt: prompt,
                 system: this.systemPrompt
@@ -303,26 +240,6 @@ async function designFlowByLLM(task: string): Promise<z.infer<typeof FlowDefinit
 你的任务是为以下任务设计一个执行流程：
 ${task}
 
-请生成一个符合以下Zod Schema的JSON格式的流程定义：
-
-const FlowDefinitionSchema = z.object({
-  task: z.string().describe("任务描述"),
-  nodes: z.array(z.object({
-    id: z.string().describe("节点ID"),
-    type: z.enum(["LLMTextNode", "LLMObjectNode", "DataProcessNode"]).describe("节点类型"),
-    config: z.object({
-      promptTemplate: z.string().optional().describe("LLM节点的提示模板"),
-      systemPrompt: z.string().optional().describe("LLM节点的系统提示"),
-      schema: z.string().optional().describe("LLM对象节点的schema（JSON字符串）"),
-      processFn: z.string().optional().describe("数据处理函数名称")
-    }).describe("节点配置")
-  })).describe("节点列表"),
-  connections: z.array(z.object({
-    from: z.string().describe("起始节点ID"),
-    to: z.string().describe("目标节点ID")
-  })).describe("节点连接关系")
-});
-
 要求：
 1. 节点ID应该简洁且具有描述性
 2. 节点类型必须是["LLMTextNode", "LLMObjectNode", "DataProcessNode"]之一
@@ -331,7 +248,7 @@ const FlowDefinitionSchema = z.object({
 5. connections定义了节点之间的执行顺序
 6. 只返回JSON，不要包含其他内容
 
-示例输出：
+一个示例：
 {
   "task": "计算一组数字的平方并求和",
   "nodes": [
@@ -370,59 +287,16 @@ const FlowDefinitionSchema = z.object({
 }
 `;
 
-    if (useMock) {
-        // 模拟LLM响应
-        const mockResponse: z.infer<typeof FlowDefinitionSchema> = {
-            task: "写一本关于游戏ECS开发历史的书",
-            nodes: [
-                {
-                    id: "start",
-                    type: "DataProcessNode",
-                    config: {
-                        processFn: "identity"
-                    }
-                },
-                {
-                    id: "research",
-                    type: "LLMTextNode",
-                    config: {
-                        promptTemplate: "研究游戏ECS架构的历史发展，包括关键人物、技术突破和重要项目。输出一个详细的大纲：{{input}}",
-                        systemPrompt: "你是一位游戏开发历史专家，熟悉ECS架构的发展历程。"
-                    }
-                },
-                {
-                    id: "write",
-                    type: "LLMTextNode",
-                    config: {
-                        promptTemplate: "根据以下大纲撰写一章内容：{{input}}",
-                        systemPrompt: "你是一位技术作家，能够将复杂的技术概念以通俗易懂的方式表达。"
-                    }
-                }
-            ],
-            connections: [
-                { from: "start", to: "research" },
-                { from: "research", to: "write" }
-            ]
-        };
-        console.log('LLM流程设计 (模拟):', JSON.stringify(mockResponse, null, 2));
-        return mockResponse;
-    }
-
     try {
-        if (!client) {
-            throw new Error('AI client is not initialized');
-        }
-
-        const { object } = await generateObject({
-            client,
-            model: 'Qwen/Qwen2.5-7B-Instruct',
+        const object = await generateObject({
+            model: client(process.env.OPENAI_MODEL as any),
             schema: FlowDefinitionSchema,
             prompt: prompt,
             system: "你是一个流程设计专家，能够根据任务生成结构化的流程定义。"
         });
 
         console.log('LLM流程设计:', JSON.stringify(object, null, 2));
-        return object;
+        return object as any;
     } catch (error) {
         console.error('LLM流程设计失败:', error);
         throw error;
@@ -434,7 +308,7 @@ async function main(task: string) {
     // 重写console.log以同时输出到页面
     const originalLog = console.log;
     const originalError = console.error;
-    
+
     // 添加日志到页面
     function addLog(message: string) {
         const outputContainer = document.getElementById('output-container');
