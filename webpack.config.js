@@ -1,5 +1,6 @@
 const path = require('path');
 const Dotenv = require('dotenv-webpack');
+const CopyWebpackPlugin = require('copy-webpack-plugin');
 
 module.exports = {
   entry: './src/script.ts',
@@ -8,21 +9,19 @@ module.exports = {
   output: {
     filename: 'bundle.js',
     path: path.resolve(__dirname, 'dist'),
+    clean: true
   },
   devServer: {
     static: {
-      directory: path.join(__dirname, 'dist'),
+      directory: path.resolve(__dirname, 'dist'),
     },
     compress: true,
     port: 9000,
+    open: true,
+    hot: true,
   },
   resolve: {
     extensions: ['.ts', '.js'],
-    fallback: {
-      "fs": false,
-      "path": false,
-      "crypto": false
-    }
   },
   module: {
     rules: [
@@ -34,6 +33,12 @@ module.exports = {
     ],
   },
   plugins: [
-    new Dotenv()
+    new Dotenv(),
+    new CopyWebpackPlugin({
+      patterns: [
+        { from: 'index.html', to: '' },
+        { from: 'styles.css', to: '' }
+      ]
+    })
   ]
 };

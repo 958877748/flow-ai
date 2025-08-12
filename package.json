@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "@guolei1994/fast-ai": "^0.3.1",
+    "copy-webpack-plugin": "^13.0.1",
     "pocketflow": "^1.0.4",
     "zod": "^3.24.1",
     "zod-to-json-schema": "^3.24.0"
