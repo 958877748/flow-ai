@@ -1,7 +1,8 @@
 const path = require('path');
+const Dotenv = require('dotenv-webpack');
 
 module.exports = {
-  entry: './src/script.js',
+  entry: './src/script.ts',
   mode: 'development',
   devtool: 'inline-source-map',
   output: {
@@ -16,11 +17,23 @@ module.exports = {
     port: 9000,
   },
   resolve: {
-    extensions: ['.js'],
+    extensions: ['.ts', '.js'],
     fallback: {
       "fs": false,
       "path": false,
       "crypto": false
     }
-  }
+  },
+  module: {
+    rules: [
+      {
+        test: /\.ts$/,
+        use: 'ts-loader',
+        exclude: /node_modules/,
+      },
+    ],
+  },
+  plugins: [
+    new Dotenv()
+  ]
 };

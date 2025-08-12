@@ -1,7 +1,7 @@
 // 引入必要的库
-const { Node, Flow } = require('pocketflow');
-const { createOpenAI, generateText, generateObject } = require('@guolei1994/fast-ai');
-const { z } = require('zod');
+import { Node, Flow } from 'pocketflow';
+import { createOpenAI, generateText, generateObject } from '@guolei1994/fast-ai';
+import { z } from 'zod';
 
 // 初始化OpenAI客户端
 // 注意：在生产环境中，API密钥应该从环境变量或安全的配置中获取
@@ -10,7 +10,7 @@ const API_KEY = ''; // 请在这里填入你的ModelScope API密钥
 // 如果没有API密钥，则使用模拟模式
 const useMock = !API_KEY;
 
-let client;
+let client: ReturnType<typeof createOpenAI> | undefined;
 if (!useMock) {
     client = createOpenAI({
         // 可以自定义baseURL，默认是https://api-inference.modelscope.cn/v1
@@ -20,14 +20,25 @@ if (!useMock) {
 }
 
 // 定义一个用于调用LLM生成文本的节点
+interface LLMTextNodeConfig {
+    promptTemplate: string;
+    systemPrompt?: string;
+    maxRetries?: number;
+    wait?: number;
+}
+
 class LLMTextNode extends Node {
-    constructor(promptTemplate, systemPrompt = '', maxRetries = 1, wait = 0) {
+    private promptTemplate: string;
+    private systemPrompt: string;
+
+    constructor(config: LLMTextNodeConfig) {
+        const { promptTemplate, systemPrompt = '', maxRetries = 1, wait = 0 } = config;
         super(maxRetries, wait);
         this.promptTemplate = promptTemplate;
         this.systemPrompt = systemPrompt;
     }
 
-    async exec(input) {
+    async exec(input: string): Promise<string> {
         const prompt = this.promptTemplate.replace('{{input}}', input || '');
 
         // 打印调试信息
@@ -39,18 +50,22 @@ class LLMTextNode extends Node {
 
         if (useMock) {
             // 模拟LLM响应
-            const mockResponse = `这是对 "${prompt}" 的模拟回复。`;
+            const mockResponse = `这是对 \"${prompt}\" 的模拟回复。`;
             console.log('LLM Text Response (模拟):', mockResponse);
             return mockResponse;
         }
 
         try {
+            if (!client) {
+                throw new Error('AI client is not initialized');
+            }
+
             const { text } = await generateText({
                 client,
                 model: 'Qwen/Qwen2.5-7B-Instruct', // 使用Qwen模型
                 messages: [
-                    ...(this.systemPrompt ? [{ role: 'system', content: this.systemPrompt }] : []),
-                    { role: 'user', content: prompt }
+                    ...(this.systemPrompt ? [{ role: 'system' as const, content: this.systemPrompt }] : []),
+                    { role: 'user' as const, content: prompt }
                 ]
             });
 
@@ -64,15 +79,28 @@ class LLMTextNode extends Node {
 }
 
 // 定义一个用于调用LLM生成结构化数据的节点
+interface LLMObjectNodeConfig {
+    schema: z.ZodSchema;
+    promptTemplate: string;
+    systemPrompt?: string;
+    maxRetries?: number;
+    wait?: number;
+}
+
 class LLMObjectNode extends Node {
-    constructor(schema, promptTemplate, systemPrompt = '', maxRetries = 1, wait = 0) {
+    private schema: z.ZodSchema;
+    private promptTemplate: string;
+    private systemPrompt: string;
+
+    constructor(config: LLMObjectNodeConfig) {
+        const { schema, promptTemplate, systemPrompt = '', maxRetries = 1, wait = 0 } = config;
         super(maxRetries, wait);
         this.schema = schema;
         this.promptTemplate = promptTemplate;
         this.systemPrompt = systemPrompt;
     }
 
-    async exec(input) {
+    async exec(input: string): Promise<any> {
         const prompt = this.promptTemplate.replace('{{input}}', input || '');
 
         // 打印调试信息
@@ -121,6 +149,10 @@ class LLMObjectNode extends Node {
         }
 
         try {
+            if (!client) {
+                throw new Error('AI client is not initialized');
+            }
+
             const { object } = await generateObject({
                 client,
                 model: 'Qwen/Qwen2.5-7B-Instruct', // 使用Qwen模型
@@ -139,13 +171,22 @@ class LLMObjectNode extends Node {
 }
 
 // 定义一个用于数据处理的节点
+interface DataProcessNodeConfig {
+    processFn: string;
+    maxRetries?: number;
+    wait?: number;
+}
+
 class DataProcessNode extends Node {
-    constructor(processFn, maxRetries = 1, wait = 0) {
+    private processFn: string;
+
+    constructor(config: DataProcessNodeConfig) {
+        const { processFn, maxRetries = 1, wait = 0 } = config;
         super(maxRetries, wait);
         this.processFn = processFn;
     }
 
-    async exec(input) {
+    async exec(input: any): Promise<any> {
         // 打印调试信息
         console.log('--- DataProcessNode 执行 ---');
         console.log('输入:', input);
@@ -153,16 +194,16 @@ class DataProcessNode extends Node {
 
         try {
             // 根据函数名称执行不同的处理逻辑
-            let result;
+            let result: any;
             switch (this.processFn) {
                 case 'identity':
                     result = input;
                     break;
                 case 'squareArray':
-                    result = Array.isArray(input) ? input.map(x => x * x) : [];
+                    result = Array.isArray(input) ? input.map((x: number) => x * x) : [];
                     break;
                 case 'sumArray':
-                    result = Array.isArray(input) ? input.reduce((a, b) => a + b, 0) : 0;
+                    result = Array.isArray(input) ? input.reduce((a: number, b: number) => a + b, 0) : 0;
                     break;
                 default:
                     result = input;
@@ -197,32 +238,34 @@ const FlowDefinitionSchema = z.object({
 });
 
 // 根据流程定义创建PocketFlow实例
-function createFlowFromDefinition(flowDef) {
+function createFlowFromDefinition(flowDef: z.infer<typeof FlowDefinitionSchema>): Flow {
     console.log('--- 创建流程 ---');
     console.log('流程定义:', JSON.stringify(flowDef, null, 2));
 
-    const nodeMap = {};
+    const nodeMap: { [key: string]: Node } = {};
 
     // 创建节点
     for (const nodeDef of flowDef.nodes) {
-        let node;
+        let node: Node;
         switch (nodeDef.type) {
             case 'LLMTextNode':
-                node = new LLMTextNode(
-                    nodeDef.config.promptTemplate || '',
-                    nodeDef.config.systemPrompt || ''
-                );
+                node = new LLMTextNode({
+                    promptTemplate: nodeDef.config.promptTemplate || '',
+                    systemPrompt: nodeDef.config.systemPrompt || ''
+                });
                 break;
             case 'LLMObjectNode':
                 // 为了简化，我们直接使用预定义的schema
-                node = new LLMObjectNode(
-                    FlowDefinitionSchema,
-                    nodeDef.config.promptTemplate || '',
-                    nodeDef.config.systemPrompt || ''
-                );
+                node = new LLMObjectNode({
+                    schema: FlowDefinitionSchema,
+                    promptTemplate: nodeDef.config.promptTemplate || '',
+                    systemPrompt: nodeDef.config.systemPrompt || ''
+                });
                 break;
             case 'DataProcessNode':
-                node = new DataProcessNode(nodeDef.config.processFn || 'identity');
+                node = new DataProcessNode({
+                    processFn: nodeDef.config.processFn || 'identity'
+                });
                 break;
             default:
                 throw new Error(`Unknown node type: ${nodeDef.type}`);
@@ -252,7 +295,7 @@ function createFlowFromDefinition(flowDef) {
 }
 
 // 让LLM设计流程的函数
-async function designFlowByLLM(task) {
+async function designFlowByLLM(task: string): Promise<z.infer<typeof FlowDefinitionSchema>> {
     console.log('--- LLM设计流程 ---');
     console.log('任务:', task);
 
@@ -329,7 +372,7 @@ const FlowDefinitionSchema = z.object({
 
     if (useMock) {
         // 模拟LLM响应
-        const mockResponse = {
+        const mockResponse: z.infer<typeof FlowDefinitionSchema> = {
             task: "写一本关于游戏ECS开发历史的书",
             nodes: [
                 {
@@ -366,6 +409,10 @@ const FlowDefinitionSchema = z.object({
     }
 
     try {
+        if (!client) {
+            throw new Error('AI client is not initialized');
+        }
+
         const { object } = await generateObject({
             client,
             model: 'Qwen/Qwen2.5-7B-Instruct',
@@ -383,34 +430,39 @@ const FlowDefinitionSchema = z.object({
 }
 
 // 主函数
-async function main(task) {
-    try {
-        // 清空输出容器
-        document.getElementById('output-container').innerHTML = '';
-
-        // 添加日志到页面
-        function addLog(message) {
-            const outputContainer = document.getElementById('output-container');
+async function main(task: string) {
+    // 重写console.log以同时输出到页面
+    const originalLog = console.log;
+    const originalError = console.error;
+    
+    // 添加日志到页面
+    function addLog(message: string) {
+        const outputContainer = document.getElementById('output-container');
+        if (outputContainer) {
             const logElement = document.createElement('pre');
             logElement.textContent = message;
             outputContainer.appendChild(logElement);
             // 滚动到底部
             outputContainer.scrollTop = outputContainer.scrollHeight;
         }
+    }
 
-        // 重写console.log以同时输出到页面
-        const originalLog = console.log;
-        console.log = function (...args) {
-            originalLog.apply(console, args);
-            addLog(args.map(arg => typeof arg === 'object' ? JSON.stringify(arg, null, 2) : arg).join(' '));
-        };
+    console.log = function (...args: any[]) {
+        originalLog(...args);
+        addLog(args.map(arg => typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)).join(' '));
+    };
 
-        // 重写console.error以同时输出到页面
-        const originalError = console.error;
-        console.error = function (...args) {
-            originalError.apply(console, args);
-            addLog('ERROR: ' + args.map(arg => typeof arg === 'object' ? JSON.stringify(arg, null, 2) : arg).join(' '));
-        };
+    console.error = function (...args: any[]) {
+        originalError(...args);
+        addLog('ERROR: ' + args.map(arg => typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)).join(' '));
+    };
+
+    try {
+        // 清空输出容器
+        const outputContainer = document.getElementById('output-container');
+        if (outputContainer) {
+            outputContainer.innerHTML = '';
+        }
 
         // 打印开始信息
         console.log('=== 开始执行任务 ===');
@@ -428,12 +480,9 @@ async function main(task) {
         const result = await flow.run(task);
         console.log('任务执行完成，最终结果:', result);
         console.log('=== 任务执行结束 ===');
-
-        // 恢复原始console.log
-        console.log = originalLog;
-        console.error = originalError;
     } catch (error) {
         console.error('执行出错:', error);
+    } finally {
         // 恢复原始console.log
         console.log = originalLog;
         console.error = originalError;
@@ -442,18 +491,20 @@ async function main(task) {
 
 // 页面加载完成后绑定事件
 document.addEventListener('DOMContentLoaded', () => {
-    const runButton = document.getElementById('run-button');
-    const taskInput = document.getElementById('task-input');
+    const runButton = document.getElementById('run-button') as HTMLButtonElement | null;
+    const taskInput = document.getElementById('task-input') as HTMLInputElement | null;
 
-    runButton.addEventListener('click', () => {
-        const task = taskInput.value.trim();
-        if (task) {
-            main(task);
-        } else {
-            alert('请输入任务');
-        }
-    });
+    if (runButton && taskInput) {
+        runButton.addEventListener('click', () => {
+            const task = taskInput.value.trim();
+            if (task) {
+                main(task);
+            } else {
+                alert('请输入任务');
+            }
+        });
 
-    // 默认任务
-    taskInput.value = '写一本关于游戏ECS开发历史的书';
+        // 默认任务
+        taskInput.value = '写一本关于游戏ECS开发历史的书';
+    }
 });
