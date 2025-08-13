@@ -3,7 +3,7 @@ const Dotenv = require('dotenv-webpack');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
 
 module.exports = {
-  entry: './src/script.ts',
+  entry: './src/main.ts',
   mode: 'development',
   devtool: 'inline-source-map',
   output: {
@@ -36,8 +36,8 @@ module.exports = {
     new Dotenv(),
     new CopyWebpackPlugin({
       patterns: [
-        { from: 'index.html', to: '' },
-        { from: 'styles.css', to: '' }
+        { from: 'src/index.html', to: '' },
+        { from: 'src/styles.css', to: '' }
       ]
     })
   ]
