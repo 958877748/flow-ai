@@ -2,6 +2,7 @@ import { createOpenAI, createTool, generateObject, generateText } from '@guolei1
 import z from 'zod';
 const openai = createOpenAI();
 openai.messages = [];
+
 // let add = createTool({
 //     name: 'add',
 //     description: '加法计算',
@@ -15,11 +16,10 @@ openai.messages = [];
 // })
 // openai.tools = [add as any];
 
-
 document.addEventListener('DOMContentLoaded', () => {
     const sendButton = document.getElementById('send-button') as HTMLButtonElement | null;
     const chatInput = document.getElementById('chat-input') as HTMLInputElement | null;
-    const chatMessages = document.getElementById('chat-messages');
+    const chatMessages = document.getElementById('chat-messages') as HTMLDivElement | null;
 
     function appendMessage(text: string, sender: 'user' | 'ai') {
         if (!chatMessages) return;
@@ -41,11 +41,12 @@ document.addEventListener('DOMContentLoaded', () => {
             appendMessage('', 'ai');
             const aiMsgDiv = chatMessages?.lastElementChild as HTMLDivElement;
 
-            // 使用流式处理
-            openai.stream(userText, (chunk, isStop) => {
+            // 使用流式处理 - 直接调用方法而不是传递回调函数
+            await openai.stream(userText, (msg) => {
                 if (aiMsgDiv) {
-                    aiMsgDiv.textContent += chunk;
-                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                    aiMsgDiv.textContent += msg;
+                    if (chatMessages)
+                        chatMessages.scrollTop = chatMessages.scrollHeight;
                 }
             });
         } catch (error) {
