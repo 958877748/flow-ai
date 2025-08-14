@@ -1,28 +1,20 @@
 import { createOpenAI, createTool, generateObject, generateText } from '@guolei1994/fast-ai';
 import z from 'zod';
+const openai = createOpenAI();
+openai.messages = [];
+// let add = createTool({
+//     name: 'add',
+//     description: '加法计算',
+//     parameters: z.object({
+//         a: z.number(),
+//         b: z.number()
+//     }),
+//     execute: async (params) => {
+//         return `${params.a + params.b}`;
+//     }
+// })
+// openai.tools = [add as any];
 
-async function main(task: string) {
-    try {
-        const openai = createOpenAI();
-        openai.messages = [];
-        let add = createTool({
-            name: 'add',
-            description: '加法计算',
-            parameters: z.object({
-                a: z.number(),
-                b: z.number()
-            }),
-            execute: async (params) => {
-                return `${params.a + params.b}`;
-            }
-        })
-        openai.tools = [add as any];
-        const msg = await openai.chat(task);
-        return msg;
-    } catch (error) {
-        throw error;
-    }
-}
 
 document.addEventListener('DOMContentLoaded', () => {
     const sendButton = document.getElementById('send-button') as HTMLButtonElement | null;
@@ -45,10 +37,17 @@ document.addEventListener('DOMContentLoaded', () => {
         appendMessage(userText, 'user');
         chatInput.value = '';
         try {
-            appendMessage('正在思考...', 'ai');
+            // 创建用于接收流式数据的元素
+            appendMessage('', 'ai');
             const aiMsgDiv = chatMessages?.lastElementChild as HTMLDivElement;
-            const aiReply = await main(userText);
-            if (aiMsgDiv) aiMsgDiv.textContent = typeof aiReply === 'string' ? aiReply : JSON.stringify(aiReply, null, 2);
+
+            // 使用流式处理
+            openai.stream(userText, (chunk, isStop) => {
+                if (aiMsgDiv) {
+                    aiMsgDiv.textContent += chunk;
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                }
+            });
         } catch (error) {
             appendMessage('AI出错了: ' + (error instanceof Error ? error.message : String(error)), 'ai');
         }
