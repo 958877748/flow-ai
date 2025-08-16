@@ -1,29 +1,26 @@
-import { createTool } from "langchain/tools";
+import { createTool } from "@guolei1994/fast-ai";
+import { addTool } from "../toolManager";
 import fs from "fs/promises";
 import path from "path";
 import z from "zod";
 
 export const saveTool = createTool({
     name: "saveTool",
-    description: "将TypeScript代码保存到固定目录下的指定文件中。如果文件路径中包含目录，则会自动创建相应的目录结构。",
+    description: "将代码保存到/tools目录下",
     parameters: z.object({
-        filePath: z.string().describe("文件路径（相对固定目录），例如：'utils/math.ts'"),
+        toolName: z.string().describe("工具名称"),
         content: z.string().describe("TypeScript文件内容")
     }),
-    execute: async ({ filePath, content }) => {
-        // 设置固定目录（可根据需要修改）
-        const baseDir = path.resolve(process.cwd(), "saved_ts_files");
-        const fullPath = path.join(baseDir, filePath);
-        
+    execute: async ({ toolName, content }) => {
+        // 确保工具名称以 .ts 结尾
+        const fileName = toolName.endsWith('.ts') ? toolName : `${toolName}.ts`;
+        // 构建完整的文件路径，保存到 /tools 目录下
+        const toolsDir = path.resolve(process.cwd(), 'src', 'tools');
+        const fullPath = path.join(toolsDir, fileName);
+
         try {
-            // 确保文件是TS格式
-            if (!filePath.endsWith(".ts")) {
-                throw new Error("文件必须以 .ts 结尾");
-            }
-            
-            // 创建目录结构（如果需要）
-            await fs.mkdir(path.dirname(fullPath), { recursive: true });
-            
+            // 确保目录存在
+            await fs.mkdir(toolsDir, { recursive: true });
             // 写入文件
             await fs.writeFile(fullPath, content, "utf-8");
             return `文件保存成功：${fullPath}`;
@@ -32,3 +29,5 @@ export const saveTool = createTool({
         }
     }
 });
+
+addTool(saveTool);
