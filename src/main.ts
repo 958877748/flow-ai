@@ -3,17 +3,19 @@ import z from 'zod';
 const openai = createOpenAI();
 openai.messages = [];
 
-// let add = createTool({
-//     name: 'add',
-//     description: '加法计算',
-//     parameters: z.object({
-//         a: z.number(),
-//         b: z.number()
-//     }),
-//     execute: async (params) => {
-//         return `${params.a + params.b}`;
-//     }
-// })
+export const add = createTool({
+    name: 'add',
+    description: '加法计算',
+    parameters: z.object({
+        a: z.number(),
+        b: z.number()
+    }),
+    execute: async (params) => {
+        return `${params.a + params.b}`;
+    }
+})
+
+
 // openai.tools = [add as any];
 
 document.addEventListener('DOMContentLoaded', () => {

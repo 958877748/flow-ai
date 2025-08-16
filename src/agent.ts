@@ -9,3 +9,8 @@ generateText({
         { role: 'user', content: '设计一个agent，这个agent的任务是：写一本关于游戏ECS开发历史的书。' }
     ]
 })
+
+export class Agent {
+    public systemPrompt?: string
+    public tools?: string[]
+}
