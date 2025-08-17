@@ -1,6 +1,6 @@
-import { createOpenAI, generateText } from "@guolei1994/fast-ai";
+import { createOpenAI, generateText, Tool } from "@guolei1994/fast-ai";
 
-import z from "zod";
+import z, { ZodTypeAny } from "zod";
 let openai = createOpenAI()
 
 generateText({
@@ -14,13 +14,13 @@ generateText({
 export class Agent {
     name: string = 'Agent';
     systemPrompt: string = ''
-    tools: string[] = []
+    tools: Tool<ZodTypeAny>[] = [];
 }
 
 type createAgentOption = {
     name: string;
     systemPrompt?: string;
-    tools?: string[];
+    tools?: Tool<ZodTypeAny>[];
 }
 export function createAgent(opt: createAgentOption) {
     const agent = new Agent()

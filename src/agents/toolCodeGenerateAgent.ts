@@ -20,7 +20,7 @@ export const add = createTool({
         b: z.number()
     }),
     execute: async ({ a, b }) => {
-        return `${a + b}`;
+        return a + b + '';
     }
 });
 
@@ -29,5 +29,4 @@ addTool(add);
 
 `,
   tools: [saveTool],
-  temperature: 0.7
 });
